@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -113,11 +112,10 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 	}
 	defer fd.Close()
 
-	if err = addBOM(fd); err != nil {
+	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
+	if err = csvWriter.AddBOM(); err != nil {
 		return err
 	}
-
-	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
 
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -134,12 +132,5 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 		return err
 	}
 
-	return nil
-}
-
-func addBOM(w io.Writer) error {
-	if _, err := w.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
-		return err
-	}
 	return nil
 }
