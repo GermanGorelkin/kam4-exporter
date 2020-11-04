@@ -104,6 +104,7 @@ func (srv SelloutService) genUniqueFileName() string {
 
 func (srv SelloutService) exportData(req SelloutRequest, fileName string) error {
 	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
+	rd.Columns = true
 
 	fpath := filepath.Join(srv.FileStore.path, fileName)
 	fd, err := os.Create(fpath)
