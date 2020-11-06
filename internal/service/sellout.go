@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"time"
@@ -29,6 +29,8 @@ type SelloutService struct {
 	MQ        PubSub
 	Email     EmailSender
 	FileStore fileStore
+
+	logger *zap.SugaredLogger
 }
 
 type fileStore struct {
@@ -42,6 +44,7 @@ type SelloutServiceConfig struct {
 	Email    EmailSender
 	FilePath string
 	FileLink string
+	Logger *zap.SugaredLogger
 }
 
 func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
@@ -53,6 +56,7 @@ func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
 			path: cfg.FilePath,
 			link: cfg.FileLink,
 		},
+		logger: cfg.Logger,
 	}
 }
 
@@ -63,10 +67,12 @@ type SelloutRequest struct {
 
 func (srv SelloutService) Run() {
 	srv.MQ.Subscribe(func(b []byte) error {
+		srv.logger.Infof("Received request from MQ: %s", string(b))
 		err := srv.handleSellout(b)
 		if err != nil {
-			logrus.Error(err)
+			srv.logger.Errorw("Got an error from handleSellout", "err", err)
 		}
+		srv.logger.Infof("Request processing completed: %s", string(b))
 		return nil
 	})
 }
@@ -83,16 +89,19 @@ func (srv SelloutService) handleSellout(b []byte) error {
 	if err = srv.exportData(req, fileName); err != nil {
 		return err
 	}
+	srv.logger.Info("ExportData completed successfully")
 
 	var email []string
 	if email, err = srv.DB.GetUserEmail(req.UserId); err != nil {
 		return err
 	}
+	srv.logger.Info("GetUserEmail completed successfully")
 
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
 	if err = srv.Email.Send(email, flink); err != nil {
 		return err
 	}
+	srv.logger.Info("EmailSend completed successfully")
 
 	return nil
 }
@@ -104,18 +113,22 @@ func (srv SelloutService) genUniqueFileName() string {
 func (srv SelloutService) exportData(req SelloutRequest, fileName string) error {
 	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
 	rd.Columns = true
+	srv.logger.Info("Init SQLReader")
 
 	fpath := filepath.Join(srv.FileStore.path, fileName)
 	fd, err := os.Create(fpath)
 	if err != nil {
 		return err
 	}
+	srv.logger.Infof("Created file %s", fpath)
 	defer fd.Close()
 
 	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
+	srv.logger.Info("Init NewCSVWriter")
 	if err = csvWriter.AddBOM(); err != nil {
 		return err
 	}
+	srv.logger.Info("Added BOM")
 
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -126,7 +139,7 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 	}
 
 	query := fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserId, string(param))
-	logrus.Println(query)
+	srv.logger.Infof("Build query %s", query)
 	err = rd.Read(ctx, query, csvWriter)
 	if err != nil {
 		return err

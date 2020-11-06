@@ -110,6 +110,7 @@ func realMain(cfg mainConfig) (fnClose, error) {
 		Email:    emailClient,
 		FilePath: cfg.storagePath,
 		FileLink: cfg.storageHost,
+		Logger:   cfg.logger.Named("sellout-service"),
 	})
 	srv.Run()
 
