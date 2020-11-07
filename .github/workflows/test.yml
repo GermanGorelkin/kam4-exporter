@@ -9,9 +9,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Configure git for private modules
-          env:
-            TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-          run: git config --global url."https://GermanGorelkin:${TOKEN}@github.com".insteadOf "https://github.com"
+        env:
+          TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: git config --global url."https://GermanGorelkin:${TOKEN}@github.com".insteadOf "https://github.com"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
