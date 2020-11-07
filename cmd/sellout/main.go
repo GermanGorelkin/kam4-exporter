@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/signal"
 
@@ -33,7 +34,11 @@ type fnClose func() error
 
 func main() {
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			log.Printf("failed to logger sync: %s", err)
+		}
+	}()
 
 	appLogger := logger.Sugar().Named(serviceName + serviceVersion)
 	appLogger.Info("The application is starting...")

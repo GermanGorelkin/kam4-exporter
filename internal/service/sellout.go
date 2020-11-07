@@ -78,28 +78,26 @@ func (srv SelloutService) Run() {
 }
 
 func (srv SelloutService) handleSellout(b []byte) error {
-	var err error
-
 	var req SelloutRequest
-	if err = json.Unmarshal(b, &req); err != nil {
-		return fmt.Errorf("error unmarshal:%s", err)
+	if err := json.Unmarshal(b, &req); err != nil {
+		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
 	fileName := srv.genUniqueFileName()
-	if err = srv.exportData(req, fileName); err != nil {
-		return err
+	if err := srv.exportData(req, fileName); err != nil {
+		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
 
-	var email []string
-	if email, err = srv.DB.GetUserEmail(req.UserId); err != nil {
-		return err
+	email, err := srv.DB.GetUserEmail(req.UserId)
+	if err != nil {
+		return fmt.Errorf("failed to GetUserEmail(%s): %w", email, err)
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
 
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
 	if err = srv.Email.Send(email, flink); err != nil {
-		return err
+		return fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
 
@@ -118,7 +116,7 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 	fpath := filepath.Join(srv.FileStore.path, fileName)
 	fd, err := os.Create(fpath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create file %s: %w", fpath, err)
 	}
 	srv.logger.Infof("Created file %s", fpath)
 	defer fd.Close()
@@ -126,7 +124,7 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
 	srv.logger.Info("Init NewCSVWriter")
 	if err = csvWriter.AddBOM(); err != nil {
-		return err
+		return fmt.Errorf("failed to AddBOM: %w", err)
 	}
 	srv.logger.Info("Added BOM")
 
@@ -135,14 +133,14 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 
 	param, err := json.Marshal(req.Param)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal %s: %w", req.Param, err)
 	}
 
 	query := fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserId, string(param))
-	srv.logger.Infof("Build query %s", query)
+	srv.logger.Infof("Export query: %s", query)
 	err = rd.Read(ctx, query, csvWriter)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read %s: %w", query, err)
 	}
 
 	return nil
