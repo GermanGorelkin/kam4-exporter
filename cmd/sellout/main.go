@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +16,7 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.6.0"
+	serviceVersion = "0.7.0"
 )
 
 type mainConfig struct {
@@ -78,7 +79,8 @@ func main() {
 		appLogger.Fatal("EMAIL_PORT is not set.")
 	}
 
-	c, err := realMain(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	c, err := realMain(ctx, cfg)
 	if err != nil {
 		appLogger.Errorw("Got an error from realMain", "err", err)
 	}
@@ -87,6 +89,8 @@ func main() {
 	signal.Notify(sigint, os.Interrupt)
 	<-sigint
 
+	cancel()
+
 	if err = c(); err != nil {
 		appLogger.Errorw("Got an error from fnClose", "err", err)
 	}
@@ -94,7 +98,7 @@ func main() {
 	appLogger.Info("The application is stopped.")
 }
 
-func realMain(cfg mainConfig) (fnClose, error) {
+func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 	dbClient := db.NewRepository(cfg.connDB)
 	mqClient := rabbitmq.New(rabbitmq.SessionConfig{
 		ExchangeName: "topic_exporter",
@@ -110,7 +114,6 @@ func realMain(cfg mainConfig) (fnClose, error) {
 		Host:     cfg.emailHost,
 		Port:     cfg.emailPort,
 	})
-
 	srv := service.NewSelloutService(service.SelloutServiceConfig{
 		DB:       dbClient,
 		MQ:       mqClient,
@@ -119,7 +122,8 @@ func realMain(cfg mainConfig) (fnClose, error) {
 		FileLink: cfg.storageHost,
 		Logger:   cfg.logger.Named("sellout-service"),
 	})
-	srv.Run()
+
+	srv.Run(ctx)
 
 	return func() error { return mqClient.Close() }, nil
 }

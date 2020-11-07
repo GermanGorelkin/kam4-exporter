@@ -65,10 +65,10 @@ type SelloutRequest struct {
 	Param  interface{} `json:"param"`
 }
 
-func (srv SelloutService) Run() {
+func (srv SelloutService) Run(ctx context.Context) {
 	srv.MQ.Subscribe(func(b []byte) error {
 		srv.logger.Infof("Received request from MQ: %s", string(b))
-		err := srv.handleSellout(b)
+		err := srv.handleSellout(ctx, b)
 		if err != nil {
 			srv.logger.Errorw("Got an error from handleSellout", "err", err)
 		}
@@ -77,14 +77,14 @@ func (srv SelloutService) Run() {
 	})
 }
 
-func (srv SelloutService) handleSellout(b []byte) error {
+func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 	var req SelloutRequest
 	if err := json.Unmarshal(b, &req); err != nil {
 		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
 	fileName := srv.genUniqueFileName()
-	if err := srv.exportData(req, fileName); err != nil {
+	if err := srv.exportData(ctx, req, fileName); err != nil {
 		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
@@ -108,7 +108,7 @@ func (srv SelloutService) genUniqueFileName() string {
 	return fmt.Sprintf("%d.csv", time.Now().UnixNano())
 }
 
-func (srv SelloutService) exportData(req SelloutRequest, fileName string) error {
+func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) error {
 	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
 	rd.Columns = true
 	srv.logger.Info("Init SQLReader")
@@ -123,13 +123,10 @@ func (srv SelloutService) exportData(req SelloutRequest, fileName string) error 
 
 	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
 	srv.logger.Info("Init NewCSVWriter")
-	if err = csvWriter.AddBOM(); err != nil {
+	if err := csvWriter.AddBOM(); err != nil {
 		return fmt.Errorf("failed to AddBOM: %w", err)
 	}
 	srv.logger.Info("Added BOM")
-
-	ctx, stop := context.WithCancel(context.Background())
-	defer stop()
 
 	param, err := json.Marshal(req.Param)
 	if err != nil {
