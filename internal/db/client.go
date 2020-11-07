@@ -21,7 +21,7 @@ func (c *client) PingContext(ctx context.Context) error {
 	return retry.Retry(func(attempt uint) error {
 		err := c.DB.PingContext(ctx)
 		if err != nil {
-			err = fmt.Errorf("failed to pinging database[%d]: %w", attempt, err)
+			err = fmt.Errorf("failed to ping database[%d]: %w", attempt, err)
 			log.Println(err)
 		}
 		return err

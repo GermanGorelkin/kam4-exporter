@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -22,7 +21,7 @@ func (rep Repository) GetDB() *sql.DB {
 
 func (rep Repository) GetUserEmail(userID int) ([]string, error) {
 	if err := rep.DB.PingContext(context.Background()); err != nil {
-		logrus.Panic(err)
+		return nil, err
 	}
 
 	rows, err := rep.DB.Query("sellout.GetUserEmail", sql.Named("userID", userID))
@@ -35,6 +34,9 @@ func (rep Repository) GetUserEmail(userID int) ([]string, error) {
 	for rows.Next() {
 		var email string
 		if err = rows.Scan(&email); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				err = ErrNoRows
+			}
 			return nil, err
 		}
 		emails = append(emails, email)
