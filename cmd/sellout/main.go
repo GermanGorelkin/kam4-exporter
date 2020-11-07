@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	serviceName = "sellout-exporter"
-	serviceVersion = "0.5.0"
+	serviceName    = "sellout-exporter"
+	serviceVersion = "0.6.0"
 )
 
 type mainConfig struct {
@@ -78,14 +78,15 @@ func main() {
 		appLogger.Fatal("EMAIL_PORT is not set.")
 	}
 
-	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-	<-sigint
-
 	c, err := realMain(cfg)
 	if err != nil {
 		appLogger.Errorw("Got an error from realMain", "err", err)
 	}
+
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
+	<-sigint
+
 	if err = c(); err != nil {
 		appLogger.Errorw("Got an error from fnClose", "err", err)
 	}
@@ -101,6 +102,7 @@ func realMain(cfg mainConfig) (fnClose, error) {
 		QueueName:    "exporter",
 		BindingKey:   "exporter",
 		Addr:         cfg.amqp,
+		Logger:       cfg.logger.Named("rabbitmq"),
 	})
 	emailClient := email.NewSender(email.SenderConfig{
 		From:     cfg.emailLogin,

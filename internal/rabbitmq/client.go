@@ -2,8 +2,9 @@ package rabbitmq
 
 import (
 	"errors"
-	"github.com/sirupsen/logrus"
+	"fmt"
 	"github.com/streadway/amqp"
+	"go.uber.org/zap"
 	"time"
 )
 
@@ -40,7 +41,7 @@ type Session struct {
 	isReady         bool
 	close           chan struct{}
 
-	log *logrus.Logger
+	logger *zap.SugaredLogger
 }
 
 type SessionConfig struct {
@@ -49,6 +50,7 @@ type SessionConfig struct {
 	QueueName    string
 	BindingKey   string
 	Addr         string
+	Logger       *zap.SugaredLogger
 }
 
 // New creates a new Session instance, and automatically
@@ -66,7 +68,7 @@ func New(cfg SessionConfig) *Session {
 		done:    make(chan bool),
 		close:   make(chan struct{}),
 
-		log: logrus.New(),
+		logger: cfg.Logger,
 	}
 	go session.handleReconnect(cfg.Addr)
 	return &session
@@ -94,12 +96,13 @@ func (session *Session) setState(s bool) {
 func (session *Session) handleReconnect(addr string) {
 	for {
 		session.setState(false)
-		session.log.Info("Attempting to connect")
+		session.logger.Info("Attempting to connect")
 
 		conn, err := session.connect(addr)
 
 		if err != nil {
-			session.log.Info("Failed to connect. Retrying...")
+			session.logger.Errorf("failed to connect: %s", err)
+			session.logger.Info("Retrying...")
 
 			select {
 			case <-session.done:
@@ -119,11 +122,12 @@ func (session *Session) handleReconnect(addr string) {
 func (session *Session) connect(addr string) (*amqp.Connection, error) {
 	conn, err := amqp.Dial(addr)
 	if err != nil {
+		err = fmt.Errorf("failed to dial to %s: %w", addr, err)
 		return nil, err
 	}
 
 	session.changeConnection(conn)
-	session.log.Info("Connected!")
+	session.logger.Info("Connected!")
 	return conn, nil
 }
 
@@ -136,8 +140,8 @@ func (session *Session) handleReInit(conn *amqp.Connection) bool {
 		err := session.init(conn)
 
 		if err != nil {
-			session.log.Errorf("Error init:%v", err)
-			session.log.Info("Failed to initialize channel. Retrying...")
+			session.logger.Errorf("failed to initialize channel: %s", err)
+			session.logger.Info("Retrying...")
 
 			select {
 			case <-session.done:
@@ -151,10 +155,10 @@ func (session *Session) handleReInit(conn *amqp.Connection) bool {
 		case <-session.done:
 			return true
 		case <-session.notifyConnClose:
-			session.log.Info("Connection closed. Reconnecting...")
+			session.logger.Info("Connection closed. Reconnecting...")
 			return false
 		case <-session.notifyChanClose:
-			session.log.Info("Channel closed. Re-running init...")
+			session.logger.Info("Channel closed. Re-running init...")
 		}
 	}
 }
@@ -163,12 +167,12 @@ func (session *Session) handleReInit(conn *amqp.Connection) bool {
 func (session *Session) init(conn *amqp.Connection) error {
 	ch, err := conn.Channel()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to conn Channel: %w", err)
 	}
 
 	err = ch.Confirm(false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to Confirm: %w", err)
 	}
 
 	err = ch.ExchangeDeclare(
@@ -181,7 +185,7 @@ func (session *Session) init(conn *amqp.Connection) error {
 		nil,                  // arguments
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to ExchangeDeclare: %w", err)
 	}
 
 	_, err = ch.QueueDeclare(
@@ -193,7 +197,7 @@ func (session *Session) init(conn *amqp.Connection) error {
 		nil,   // Arguments
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to QueueDeclare: %w", err)
 	}
 
 	err = ch.QueueBind(
@@ -203,17 +207,17 @@ func (session *Session) init(conn *amqp.Connection) error {
 		false,
 		nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to QueueBind: %w", err)
 	}
 
 	err = ch.Qos(1, 0, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to Qos: %w", err)
 	}
 
 	session.changeChannel(ch)
 	session.setState(true)
-	session.log.Info("Setup!")
+	session.logger.Info("Setup!")
 
 	return nil
 }
@@ -248,7 +252,7 @@ func (session *Session) Push(data []byte) error {
 	for {
 		err := session.UnsafePush(data)
 		if err != nil {
-			//session.log.Info("Push failed. Retrying...")
+			session.logger.Errorf("failed to UnsafePush: %s", err)
 			select {
 			case <-session.done:
 				return ErrShutdown
@@ -259,12 +263,10 @@ func (session *Session) Push(data []byte) error {
 		select {
 		case confirm := <-session.notifyConfirm:
 			if confirm.Ack {
-				//log.Println("Push confirmed!")
 				return nil
 			}
 		case <-time.After(resendDelay):
 		}
-		//log.Println("Push didn't confirm. Retrying...")
 	}
 }
 
@@ -313,15 +315,15 @@ func (session *Session) Subscribe(handler func([]byte) error) {
 		for {
 			deliveries, err := session.Stream()
 			if err == ErrNotConnected {
-				session.log.Infof("Init Stream error: %v", err)
+				session.logger.Errorf("failed to Stream: %s", err)
 				time.Sleep(reInitDelay)
 				continue
 			} else if err != nil {
 				// Panic!
-				session.log.Panic(err)
+				session.logger.Panic(err)
 			}
 
-			session.log.Info("Consumer delivers!")
+			session.logger.Info("Consumer delivers!")
 
 			for deliveries != nil {
 				select {
@@ -338,7 +340,7 @@ func (session *Session) Subscribe(handler func([]byte) error) {
 				}
 			}
 
-			session.log.Info("Consumer closed!")
+			session.logger.Info("Consumer closed!")
 		}
 	}()
 }
@@ -346,7 +348,7 @@ func (session *Session) Subscribe(handler func([]byte) error) {
 func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) error) {
 	defer func() {
 		if r := recover(); r != nil {
-			session.log.Infof("Handler panic:%v", r)
+			session.logger.Errorf("Handler panic:%v", r)
 			_ = d.Nack(false, true)
 		}
 	}()
@@ -354,7 +356,7 @@ func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) err
 	if err := handler(d.Body); err == nil {
 		_ = d.Ack(false)
 	} else {
-		session.log.Errorf("handleDelivery error:%v", err)
+		session.logger.Errorf("failed to handleDelivery: %s", err)
 		_ = d.Nack(false, true)
 	}
 }
@@ -368,11 +370,11 @@ func (session *Session) Close() error {
 	session.setState(false)
 	err := session.channel.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to channel close: %w", err)
 	}
 	err = session.connection.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to connection close: %w", err)
 	}
 	close(session.done)
 
