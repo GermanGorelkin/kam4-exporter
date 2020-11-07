@@ -46,6 +46,6 @@ func NewSender(cfg SenderConfig) Sender {
 }
 
 func (s Sender) Send(receivers []string, msg string) error {
-	body := fmt.Sprintf(fmt.Sprintf(templateSelloutExport, s.from, receivers[0], msg))
+	body := fmt.Sprintf(templateSelloutExport, s.from, receivers[0], msg)
 	return smtp.SendMail(s.server.address(), s.auth, s.from, receivers, []byte(body))
 }
