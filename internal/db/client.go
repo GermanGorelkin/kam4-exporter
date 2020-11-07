@@ -4,12 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/Rican7/retry"
 	"github.com/Rican7/retry/strategy"
-	"github.com/sirupsen/logrus"
-
 	_ "github.com/denisenkom/go-mssqldb"
 )
 
@@ -22,8 +21,8 @@ func (c *client) PingContext(ctx context.Context) error {
 	return retry.Retry(func(attempt uint) error {
 		err := c.DB.PingContext(ctx)
 		if err != nil {
-			err = fmt.Errorf("Error pinging database[%d]: %s\n", attempt, err)
-			logrus.Errorln(err)
+			err = fmt.Errorf("failed to pinging database[%d]: %w", attempt, err)
+			log.Println(err)
 		}
 		return err
 	},
@@ -37,8 +36,8 @@ func (c *client) PingContext(ctx context.Context) error {
 func NewRepository(connString string) Repository {
 	db, err := sql.Open("sqlserver", connString)
 	if err != nil {
-		err = fmt.Errorf("Error open conn to database: %w\n", err)
-		logrus.Panic(err)
+		err = fmt.Errorf("failed to open conn to database: %w\n", err)
+		log.Panic(err)
 	}
 	return Repository{DB: &client{db}}
 }
