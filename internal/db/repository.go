@@ -47,5 +47,9 @@ func (rep Repository) GetUserEmail(userID int) ([]string, error) {
 		return nil, err
 	}
 
+	if len(emails) == 0 {
+		return nil, ErrNoRows
+	}
+
 	return emails, nil
 }

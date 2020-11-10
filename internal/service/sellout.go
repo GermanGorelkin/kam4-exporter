@@ -83,17 +83,17 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
-	fileName := srv.genUniqueFileName()
-	if err := srv.exportData(ctx, req, fileName); err != nil {
-		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
-	}
-	srv.logger.Info("ExportData completed successfully")
-
 	email, err := srv.DB.GetUserEmail(req.UserId)
 	if err != nil {
 		return fmt.Errorf("failed to GetUserEmail(%s): %w", email, err)
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
+
+	fileName := srv.genUniqueFileName()
+	if err := srv.exportData(ctx, req, fileName); err != nil {
+		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
+	}
+	srv.logger.Info("ExportData completed successfully")
 
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
 	if err = srv.Email.Send(email, flink); err != nil {
