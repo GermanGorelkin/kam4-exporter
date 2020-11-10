@@ -1,8 +1,13 @@
 package email
 
 import (
+	"errors"
 	"fmt"
 	"net/smtp"
+)
+
+var (
+	ErrNoReceivers= errors.New("no receivers")
 )
 
 var templateSelloutExport =
@@ -46,6 +51,9 @@ func NewSender(cfg SenderConfig) Sender {
 }
 
 func (s Sender) Send(receivers []string, msg string) error {
+	if len(receivers) == 0 {
+		return ErrNoReceivers
+	}
 	body := fmt.Sprintf(templateSelloutExport, s.from, receivers[0], msg)
 	return smtp.SendMail(s.server.address(), s.auth, s.from, receivers, []byte(body))
 }
