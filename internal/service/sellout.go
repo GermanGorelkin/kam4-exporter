@@ -108,7 +108,7 @@ func (srv SelloutService) genUniqueFileName() string {
 	return fmt.Sprintf("%d.csv", time.Now().UnixNano())
 }
 
-func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) error {
+func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) (err error) {
 	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
 	rd.Columns = true
 	srv.logger.Info("Init SQLReader")
@@ -119,7 +119,11 @@ func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fi
 		return fmt.Errorf("failed to create file %s: %w", fpath, err)
 	}
 	srv.logger.Infof("Created file %s", fpath)
-	defer fd.Close()
+	defer func() {
+		if cErr := fd.Close(); cErr != nil {
+			err = cErr
+		}
+	}()
 
 	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
 	srv.logger.Info("Init NewCSVWriter")
