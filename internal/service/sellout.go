@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/germangorelkin/kam4-exporter/internal/metric"
 	"go.uber.org/zap"
 
 	"github.com/germangorelkin/sql2csv"
@@ -31,7 +32,8 @@ type SelloutService struct {
 	Email     EmailSender
 	FileStore fileStore
 
-	logger *zap.SugaredLogger
+	metrics metric.Service
+	logger  *zap.SugaredLogger
 }
 
 type fileStore struct {
@@ -45,7 +47,8 @@ type SelloutServiceConfig struct {
 	Email    EmailSender
 	FilePath string
 	FileLink string
-	Logger *zap.SugaredLogger
+	Logger   *zap.SugaredLogger
+	Metrics  metric.Service
 }
 
 func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
@@ -57,7 +60,8 @@ func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
 			path: cfg.FilePath,
 			link: cfg.FileLink,
 		},
-		logger: cfg.Logger,
+		logger:  cfg.Logger,
+		metrics: cfg.Metrics,
 	}
 }
 
@@ -68,9 +72,17 @@ type SelloutRequest struct {
 
 func (srv SelloutService) Run(ctx context.Context) {
 	srv.MQ.Subscribe(func(b []byte) error {
+		code := "success"
+		started := time.Now()
+		defer func() {
+			srv.metrics.DurationSelloutExport(code, time.Since(started).Seconds())
+			srv.metrics.TotalSelloutExport(code)
+		}()
+
 		srv.logger.Infof("Received request from MQ: %s", string(b))
-		err := srv.handleSellout(ctx, b)
+		err := srv.handleSellout(ctx, b) // handle
 		if err != nil {
+			code = "fail"
 			srv.logger.Errorw("Got an error from handleSellout", "err", err)
 		}
 		srv.logger.Infof("Request processing completed: %s", string(b))

@@ -9,6 +9,7 @@ import (
 
 	"github.com/germangorelkin/kam4-exporter/internal/db"
 	"github.com/germangorelkin/kam4-exporter/internal/email"
+	"github.com/germangorelkin/kam4-exporter/internal/metric"
 	"github.com/germangorelkin/kam4-exporter/internal/rabbitmq"
 	"github.com/germangorelkin/kam4-exporter/internal/server"
 	"github.com/germangorelkin/kam4-exporter/internal/service"
@@ -19,7 +20,7 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.11.0"
+	serviceVersion = "0.12.0"
 )
 
 type mainConfig struct {
@@ -107,6 +108,7 @@ func main() {
 }
 
 func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
+	obs, _ := metric.NewPrometheusService()
 	dbClient := db.NewRepository(cfg.connDB)
 	mqClient := rabbitmq.New(rabbitmq.SessionConfig{
 		ExchangeName: "topic_exporter",
@@ -129,6 +131,7 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		FilePath: cfg.storagePath,
 		FileLink: cfg.storageHost,
 		Logger:   cfg.logger.Named("sellout-service"),
+		Metrics:  obs,
 	})
 
 	// http server
