@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"os"
 	"path/filepath"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/germangorelkin/sql2csv"
 )

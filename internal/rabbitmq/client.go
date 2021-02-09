@@ -3,9 +3,10 @@ package rabbitmq
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/streadway/amqp"
 	"go.uber.org/zap"
-	"time"
 )
 
 const (
