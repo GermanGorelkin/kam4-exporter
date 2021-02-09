@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 
 	"github.com/germangorelkin/kam4-exporter/internal/db"
 	"github.com/germangorelkin/kam4-exporter/internal/email"
 	"github.com/germangorelkin/kam4-exporter/internal/rabbitmq"
+	"github.com/germangorelkin/kam4-exporter/internal/server"
 	"github.com/germangorelkin/kam4-exporter/internal/service"
 
 	"go.uber.org/zap"
@@ -16,7 +18,7 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.9.1"
+	serviceVersion = "0.10.0"
 )
 
 type mainConfig struct {
@@ -28,6 +30,7 @@ type mainConfig struct {
 	emailPassword string
 	emailHost     string
 	emailPort     string
+	serverAddress string
 	logger        *zap.SugaredLogger
 }
 
@@ -78,6 +81,10 @@ func main() {
 	if cfg.emailPort == "" {
 		appLogger.Fatal("EMAIL_PORT is not set.")
 	}
+	cfg.serverAddress = os.Getenv("ADDR")
+	if cfg.serverAddress == "" {
+		appLogger.Info("ADDR is not set.")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c, err := realMain(ctx, cfg)
@@ -123,7 +130,27 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		Logger:   cfg.logger.Named("sellout-service"),
 	})
 
+	// http server
+	go func() {
+		if cfg.serverAddress == "" {
+			return
+		}
+		srvLogger := cfg.logger.Named("http-server")
+		srvLogger.Info("Starting server at %s", cfg.serverAddress)
+		if err := runServer(ctx, cfg.serverAddress); err != nil {
+			srvLogger.Errorw("Got an error from http server", "err", err)
+		}
+		srvLogger.Info("Stopping server at %s", cfg.serverAddress)
+	}()
+
+	// sellout service
 	srv.Run(ctx)
 
 	return func() error { return mqClient.Close() }, nil
+}
+
+func runServer(ctx context.Context, addr string) error {
+	mux := http.NewServeMux()
+	mux.Handle("/health", server.HandleHealthz(ctx))
+	return http.ListenAndServe(addr, mux)
 }
