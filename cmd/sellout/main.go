@@ -13,12 +13,13 @@ import (
 	"github.com/germangorelkin/kam4-exporter/internal/server"
 	"github.com/germangorelkin/kam4-exporter/internal/service"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.10.0"
+	serviceVersion = "0.11.0"
 )
 
 type mainConfig struct {
@@ -152,5 +153,6 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 func runServer(ctx context.Context, addr string) error {
 	mux := http.NewServeMux()
 	mux.Handle("/health", server.HandleHealthz(ctx))
+	mux.Handle("/metrics", promhttp.Handler())
 	return http.ListenAndServe(addr, mux)
 }
