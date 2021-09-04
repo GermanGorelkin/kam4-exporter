@@ -2,17 +2,13 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/germangorelkin/kam4-exporter/internal/metric"
 	"go.uber.org/zap"
-
-	"github.com/germangorelkin/sql2csv"
 )
 
 type PubSub interface {
@@ -22,8 +18,11 @@ type EmailSender interface {
 	Send(receivers []string, msg string) error
 }
 type Repository interface {
-	GetDB() *sql.DB
 	GetUserEmail(userID int) ([]string, error)
+}
+type Report interface {
+	Build(ctx context.Context, fileName string, sqlQuery string) error
+	FileExtension() string
 }
 
 type SelloutService struct {
@@ -31,6 +30,7 @@ type SelloutService struct {
 	MQ        PubSub
 	Email     EmailSender
 	FileStore fileStore
+	Report    Report
 
 	metrics metric.Service
 	logger  *zap.SugaredLogger
@@ -44,6 +44,7 @@ type fileStore struct {
 type SelloutServiceConfig struct {
 	DB       Repository
 	MQ       PubSub
+	Report   Report
 	Email    EmailSender
 	FilePath string
 	FileLink string
@@ -53,9 +54,10 @@ type SelloutServiceConfig struct {
 
 func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
 	return SelloutService{
-		DB:    cfg.DB,
-		MQ:    cfg.MQ,
-		Email: cfg.Email,
+		DB:     cfg.DB,
+		MQ:     cfg.MQ,
+		Email:  cfg.Email,
+		Report: cfg.Report,
 		FileStore: fileStore{
 			path: cfg.FilePath,
 			link: cfg.FileLink,
@@ -102,14 +104,14 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
 
-	fileName := srv.genUniqueFileName()
+	fileName := srv.genUniqueFileName(srv.Report.FileExtension())
 	if err := srv.exportData(ctx, req, fileName); err != nil {
 		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
 
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
-	if err = srv.Email.Send(email, flink); err != nil {
+	if err := srv.Email.Send(email, flink); err != nil {
 		return fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
@@ -117,45 +119,18 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 	return nil
 }
 
-func (srv SelloutService) genUniqueFileName() string {
-	return fmt.Sprintf("%d.csv", time.Now().UnixNano())
+func (srv SelloutService) genUniqueFileName(extension string) string {
+	return fmt.Sprintf("%d.%s", time.Now().UnixNano(), extension)
 }
 
 func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) (err error) {
-	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
-	rd.Columns = true
-	srv.logger.Info("Init SQLReader")
-
-	fpath := filepath.Join(srv.FileStore.path, fileName)
-	fd, err := os.Create(fpath)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", fpath, err)
-	}
-	srv.logger.Infof("Created file %s", fpath)
-	defer func() {
-		if cErr := fd.Close(); cErr != nil {
-			err = cErr
-		}
-	}()
-
-	csvWriter := sql2csv.NewCSVWriter([]byte(";"), []byte("\r\n"), fd)
-	srv.logger.Info("Init NewCSVWriter")
-	if err := csvWriter.AddBOM(); err != nil {
-		return fmt.Errorf("failed to AddBOM: %w", err)
-	}
-	srv.logger.Info("Added BOM")
-
 	param, err := json.Marshal(req.Param)
 	if err != nil {
 		return fmt.Errorf("failed to marshal %s: %w", req.Param, err)
 	}
-
 	query := fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserId, string(param))
-	srv.logger.Infof("Export query: %s", query)
-	err = rd.Read(ctx, query, csvWriter)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", query, err)
-	}
 
-	return nil
+	fpath := filepath.Join(srv.FileStore.path, fileName)
+
+	return srv.Report.Build(ctx, fpath, query)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/germangorelkin/kam4-exporter/internal/email"
 	"github.com/germangorelkin/kam4-exporter/internal/metric"
 	"github.com/germangorelkin/kam4-exporter/internal/rabbitmq"
+	"github.com/germangorelkin/kam4-exporter/internal/report"
 	"github.com/germangorelkin/kam4-exporter/internal/server"
 	"github.com/germangorelkin/kam4-exporter/internal/service"
 
@@ -33,6 +34,7 @@ type mainConfig struct {
 	emailHost     string
 	emailPort     string
 	serverAddress string
+	typeReport    string
 	logger        *zap.SugaredLogger
 }
 
@@ -87,6 +89,10 @@ func main() {
 	if cfg.serverAddress == "" {
 		appLogger.Info("ADDR is not set.")
 	}
+	cfg.typeReport = os.Getenv("TYPE_REPORT")
+	if cfg.typeReport == "" {
+		appLogger.Info("TYPE_REPORT is not set.")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c, err := realMain(ctx, cfg)
@@ -110,6 +116,22 @@ func main() {
 func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 	obs, _ := metric.NewPrometheusService()
 	dbClient := db.NewRepository(cfg.connDB)
+
+	var reportSrv service.Report
+	if cfg.typeReport == "CSV" {
+		reportSrv = report.NewCSVReport(report.CSVReportConfig{
+			DB:     dbClient,
+			Logger: cfg.logger.Named("csv-report"),
+		})
+	} else if cfg.typeReport == "XLSX" {
+		reportSrv = report.NewCSVReport(report.CSVReportConfig{
+			DB:     dbClient,
+			Logger: cfg.logger.Named("csv-report"),
+		})
+	} else {
+		log.Fatalf("typeReport=%s is unsupported", cfg.typeReport)
+	}
+
 	mqClient := rabbitmq.New(rabbitmq.SessionConfig{
 		ExchangeName: "topic_exporter",
 		ExchangeType: "topic",
@@ -128,6 +150,7 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		DB:       dbClient,
 		MQ:       mqClient,
 		Email:    emailClient,
+		Report:   reportSrv,
 		FilePath: cfg.storagePath,
 		FileLink: cfg.storageHost,
 		Logger:   cfg.logger.Named("sellout-service"),
