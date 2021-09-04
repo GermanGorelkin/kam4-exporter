@@ -18,5 +18,7 @@ bin/*
 # Set var env
 *.bat
 
+.DS_Store
+
 # Environment Variables
 .env
