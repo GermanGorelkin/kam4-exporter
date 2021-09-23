@@ -21,7 +21,7 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.12.0"
+	serviceVersion = "0.15.0"
 )
 
 type mainConfig struct {

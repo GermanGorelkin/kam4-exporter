@@ -13,6 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	EXCEL_LIMIT_ROWS = 1_048_576
+)
+
 type XLSXReport struct {
 	DB Repository
 
@@ -50,13 +54,13 @@ func (srv XLSXReport) createPivot(ctx context.Context, filePath string, wr *Exce
 	// }
 
 	_ = file.NewSheet("pivot")
-	dataRange := fmt.Sprintf("data!%s:%s", coordinatesToCellName(1, 1, true), coordinatesToCellName(len(wr.cols), wr.rowNum, true))
+	dataRange := fmt.Sprintf("data!%s:%s", coordinatesToCellName(1, 1, true), coordinatesToCellName(len(wr.columns), wr.rowsCount, true))
 
 	pivotDatas := make([]excelize.PivotTableField, 0, 1)
-	for i := wr.colNumData; i < len(wr.cols); i++ {
+	for i := wr.columnsBeginData; i < len(wr.columns); i++ {
 		pivotDatas = append(pivotDatas, excelize.PivotTableField{
-			Data:     wr.cols[i],
-			Name:     wr.cols[i],
+			Data:     wr.columns[i],
+			Name:     wr.columns[i],
 			Subtotal: "Sum",
 		})
 	}
@@ -104,9 +108,10 @@ func (srv XLSXReport) exportData(ctx context.Context, filePath string, sqlQuery 
 		return fmt.Errorf("failed to SaveAs:%w", err)
 	}
 
-	srv.logger.Infof("writed %d rows", wr.rowNum)
+	srv.logger.Infof("%d rows recorded", wr.rowsCount)
+	srv.logger.Infof("%d rows skipped", wr.rowsSkip)
 
-	if wr.colNumData == 0 || wr.rowNum == 0 {
+	if wr.columnsBeginData == 0 || wr.rowsCount == 0 {
 		return nil
 	}
 
@@ -142,10 +147,12 @@ func coordinatesToCellName(col, row int, abs bool) string {
 
 //
 type ExcelWriter struct {
-	w          *excelize.StreamWriter
-	rowNum     int
-	cols       []string
-	colNumData int
+	w                *excelize.StreamWriter
+	rowsCount        int
+	rowsSkip         int
+	rowsLimit        int // 1_048_576
+	columns          []string
+	columnsBeginData int
 
 	logger *zap.SugaredLogger
 }
@@ -153,30 +160,47 @@ type ExcelWriter struct {
 type ExcelWriterConfig struct {
 	StreamWriter *excelize.StreamWriter
 	Logger       *zap.SugaredLogger
+
+	RowsLimit int
 }
 
 func NewExcelWriter(cfg ExcelWriterConfig) *ExcelWriter {
+	ew := &ExcelWriter{
+		w:         cfg.StreamWriter,
+		logger:    cfg.Logger,
+		rowsLimit: cfg.RowsLimit,
+	}
+	if ew.rowsLimit == 0 || ew.rowsLimit > EXCEL_LIMIT_ROWS {
+		ew.rowsLimit = EXCEL_LIMIT_ROWS
+	}
+
 	return &ExcelWriter{w: cfg.StreamWriter, logger: cfg.Logger}
 }
 
 func (wr *ExcelWriter) WriteStrings(data []string) error {
-	wr.cols = data
+	wr.columns = data
 	row := make([]interface{}, len(data))
 	for i, v := range data {
 		row[i] = v
 
 		// begin of block of data
 		// after [withComp]
-		if wr.colNumData == 0 && strings.Contains(v, "withComp") {
-			wr.colNumData = i + 1
+		if wr.columnsBeginData == 0 && strings.Contains(v, "withComp") {
+			wr.columnsBeginData = i + 1
 		}
 	}
-	wr.rowNum++
-	cell, _ := excelize.CoordinatesToCellName(1, wr.rowNum)
+	wr.rowsCount++
+	cell, _ := excelize.CoordinatesToCellName(1, wr.rowsCount)
 	return wr.w.SetRow(cell, row)
 }
 
 func (wr *ExcelWriter) Write(data []interface{}) error {
+	// TODO
+	if wr.rowsCount >= wr.rowsLimit {
+		wr.rowsSkip++
+		return nil
+	}
+
 	row := make([]interface{}, len(data))
 	for i, v := range data {
 		b := copyBytes(*(v.(*sql.RawBytes)))
@@ -184,7 +208,7 @@ func (wr *ExcelWriter) Write(data []interface{}) error {
 			continue
 		}
 
-		if wr.colNumData > i {
+		if wr.columnsBeginData > i {
 			row[i] = b
 		} else {
 			f, err := strconv.ParseFloat(string(b), 64)
@@ -195,8 +219,8 @@ func (wr *ExcelWriter) Write(data []interface{}) error {
 			row[i] = f
 		}
 	}
-	wr.rowNum++
-	cell, _ := excelize.CoordinatesToCellName(1, wr.rowNum)
+	wr.rowsCount++
+	cell, _ := excelize.CoordinatesToCellName(1, wr.rowsCount)
 	return wr.w.SetRow(cell, row)
 }
 
