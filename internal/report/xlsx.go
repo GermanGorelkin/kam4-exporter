@@ -174,7 +174,7 @@ func NewExcelWriter(cfg ExcelWriterConfig) *ExcelWriter {
 		ew.rowsLimit = EXCEL_LIMIT_ROWS
 	}
 
-	return &ExcelWriter{w: cfg.StreamWriter, logger: cfg.Logger}
+	return ew
 }
 
 func (wr *ExcelWriter) WriteStrings(data []string) error {
