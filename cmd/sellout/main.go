@@ -124,9 +124,9 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 			Logger: cfg.logger.Named("csv-report"),
 		})
 	} else if cfg.typeReport == "XLSX" {
-		reportSrv = report.NewCSVReport(report.CSVReportConfig{
+		reportSrv = report.NewXLSXReport(report.XLSXReportConfig{
 			DB:     dbClient,
-			Logger: cfg.logger.Named("csv-report"),
+			Logger: cfg.logger.Named("xlsx-report"),
 		})
 	} else {
 		log.Fatalf("typeReport=%s is unsupported", cfg.typeReport)
