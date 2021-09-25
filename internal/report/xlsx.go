@@ -39,8 +39,8 @@ func (srv XLSXReport) FileExtension() string {
 	return ".xlsx"
 }
 
-func (srv XLSXReport) Build(ctx context.Context, filePath string, sqlQuery string) error {
-	return srv.exportData(ctx, filePath, sqlQuery)
+func (srv XLSXReport) Build(ctx context.Context, cfg ReportConfig) error {
+	return srv.exportData(ctx, cfg.FilePath, cfg.SQLQuery, cfg.ExcelConfig)
 }
 
 func (srv XLSXReport) createPivot(ctx context.Context, filePath string, wr *ExcelWriter) error {
@@ -84,7 +84,7 @@ func (srv XLSXReport) createPivot(ctx context.Context, filePath string, wr *Exce
 	return nil
 }
 
-func (srv XLSXReport) exportData(ctx context.Context, filePath string, sqlQuery string) error {
+func (srv XLSXReport) exportData(ctx context.Context, filePath string, sqlQuery string, excelCfg ExcelConfig) error {
 	file := excelize.NewFile()
 	file.SetSheetName("Sheet1", "data")
 	streamWriter, err := file.NewStreamWriter("data")
@@ -111,12 +111,16 @@ func (srv XLSXReport) exportData(ctx context.Context, filePath string, sqlQuery 
 	srv.logger.Infof("%d rows recorded", wr.rowsCount)
 	srv.logger.Infof("%d rows skipped", wr.rowsSkip)
 
-	if wr.columnsBeginData == 0 || wr.rowsCount == 0 {
-		return nil
-	}
+	if excelCfg.NeedPivot {
+		if wr.columnsBeginData == 0 || wr.rowsCount == 0 {
+			srv.logger.Infof("columnsBeginData=%d rowsCount=%d", wr.columnsBeginData, wr.rowsCount)
+			return nil
+		}
 
-	if err := srv.createPivot(ctx, filePath, wr); err != nil {
-		return fmt.Errorf("failed creatPivot:%w", err)
+		srv.logger.Infof("adding pivot")
+		if err := srv.createPivot(ctx, filePath, wr); err != nil {
+			return fmt.Errorf("failed creatPivot:%w", err)
+		}
 	}
 
 	return nil

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/germangorelkin/kam4-exporter/internal/metric"
+	"github.com/germangorelkin/kam4-exporter/internal/report"
 	"go.uber.org/zap"
 )
 
@@ -21,7 +22,7 @@ type Repository interface {
 	GetUserEmail(userID int) ([]string, error)
 }
 type Report interface {
-	Build(ctx context.Context, fileName string, sqlQuery string) error
+	Build(ctx context.Context, cfg report.ReportConfig) error
 	FileExtension() string
 }
 
@@ -68,8 +69,25 @@ func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
 }
 
 type SelloutRequest struct {
-	UserId int         `json:"user_id"`
-	Param  interface{} `json:"param"`
+	UserID int `json:"user_id"`
+	Param  struct {
+		BeginDate string `json:"begin_date"`
+		EndDate   string `json:"end_date"`
+		Period    string `json:"period"`
+		Details   string `json:"details"`
+		Clients   []int  `json:"clients"`
+		DataFrom  string `json:"data_from"`
+		Products  []struct {
+			Manufacturerid int    `json:"manufacturerID"`
+			Categoryid     int    `json:"categoryID"`
+			Subcategoryid  int    `json:"subcategoryID"`
+			Brandid        int    `json:"brandID"`
+			Name           string `json:"name"`
+		} `json:"products"`
+		ValueType       []string `json:"value_type"`
+		WithCompetitors int      `json:"with_competitors"`
+		Wholesale       string   `json:"wholesale"`
+	} `json:"param"`
 }
 
 func (srv SelloutService) Run(ctx context.Context) {
@@ -98,11 +116,12 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
-	email, err := srv.DB.GetUserEmail(req.UserId)
+	email, err := srv.DB.GetUserEmail(req.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to GetUserEmail(%s): %w", email, err)
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
+	srv.logger.Debugf("%v for userID=%d", email, req.UserID)
 
 	fileName := srv.genUniqueFileName(srv.Report.FileExtension())
 	if err := srv.exportData(ctx, req, fileName); err != nil {
@@ -123,14 +142,35 @@ func (srv SelloutService) genUniqueFileName(extension string) string {
 	return fmt.Sprintf("%d.%s", time.Now().UnixNano(), extension)
 }
 
-func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) (err error) {
+func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) error {
+	query, err := buildSQLQuery(req)
+	if err != nil {
+		return fmt.Errorf("failed to build sql query:%w", err)
+	}
+
+	cfg := report.ReportConfig{
+		FilePath:    filepath.Join(srv.FileStore.path, fileName),
+		SQLQuery:    query,
+		ExcelConfig: buildExcelConfig(req),
+	}
+	return srv.Report.Build(ctx, cfg)
+}
+
+func buildExcelConfig(req SelloutRequest) report.ExcelConfig {
+	needPivot := false
+	if req.Param.Period == "month" && req.Param.Details == "network" {
+		needPivot = true
+	}
+
+	return report.ExcelConfig{
+		NeedPivot: needPivot,
+	}
+}
+
+func buildSQLQuery(req SelloutRequest) (string, error) {
 	param, err := json.Marshal(req.Param)
 	if err != nil {
-		return fmt.Errorf("failed to marshal %s: %w", req.Param, err)
+		return "", fmt.Errorf("failed to marshal %#v: %w", req.Param, err)
 	}
-	query := fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserId, string(param))
-
-	fpath := filepath.Join(srv.FileStore.path, fileName)
-
-	return srv.Report.Build(ctx, fpath, query)
+	return fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserID, string(param)), nil
 }

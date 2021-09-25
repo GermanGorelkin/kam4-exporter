@@ -36,16 +36,16 @@ func (srv CSVReport) FileExtension() string {
 	return ".csv"
 }
 
-func (srv CSVReport) Build(ctx context.Context, filePath string, sqlQuery string) (err error) {
+func (srv CSVReport) Build(ctx context.Context, cfg ReportConfig) (err error) {
 	rd := sql2csv.SQLReader{DB: srv.DB.GetDB()}
 	rd.Columns = true
 	srv.logger.Info("Init SQLReader")
 
-	fd, err := os.Create(filePath)
+	fd, err := os.Create(cfg.FilePath)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filePath, err)
+		return fmt.Errorf("failed to create file %s: %w", cfg.FilePath, err)
 	}
-	srv.logger.Infof("Created file %s", filePath)
+	srv.logger.Infof("Created file %s", cfg.FilePath)
 	defer func() {
 		if cErr := fd.Close(); cErr != nil {
 			err = cErr
@@ -59,10 +59,10 @@ func (srv CSVReport) Build(ctx context.Context, filePath string, sqlQuery string
 	}
 	srv.logger.Info("Added BOM")
 
-	srv.logger.Infof("Export query: %s", sqlQuery)
-	err = rd.Read(ctx, sqlQuery, csvWriter)
+	srv.logger.Infof("Export query: %s", cfg.SQLQuery)
+	err = rd.Read(ctx, cfg.SQLQuery, csvWriter)
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", sqlQuery, err)
+		return fmt.Errorf("failed to read %s: %w", cfg.SQLQuery, err)
 	}
 
 	return nil
