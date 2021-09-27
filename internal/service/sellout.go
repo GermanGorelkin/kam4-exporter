@@ -78,11 +78,10 @@ type SelloutRequest struct {
 		Clients   []int  `json:"clients"`
 		DataFrom  string `json:"data_from"`
 		Products  []struct {
-			Manufacturerid int    `json:"manufacturerID"`
-			Categoryid     int    `json:"categoryID"`
-			Subcategoryid  int    `json:"subcategoryID"`
-			Brandid        int    `json:"brandID"`
-			Name           string `json:"name"`
+			Manufacturerid int `json:"manufacturerID,omitempty"`
+			Categoryid     int `json:"categoryID,omitempty"`
+			Subcategoryid  int `json:"subcategoryID,omitempty"`
+			Brandid        int `json:"brandID,omitempty"`
 		} `json:"products"`
 		ValueType       []string `json:"value_type"`
 		WithCompetitors int      `json:"with_competitors"`
