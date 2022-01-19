@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,10 +17,11 @@ type PubSub interface {
 	Subscribe(func(b []byte) error)
 }
 type EmailSender interface {
-	Send(receivers []string, msg string) error
+	Send(receivers []string, subject, msg string) error
 }
 type Repository interface {
 	GetUserEmail(userID int) ([]string, error)
+	GetClientName(id int) (string, error)
 }
 type Report interface {
 	Build(ctx context.Context, cfg report.ReportConfig) error
@@ -117,7 +119,7 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 
 	email, err := srv.DB.GetUserEmail(req.UserID)
 	if err != nil {
-		return fmt.Errorf("failed to GetUserEmail(%s): %w", email, err)
+		return fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
 	srv.logger.Debugf("%v for userID=%d", email, req.UserID)
@@ -128,8 +130,13 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 	}
 	srv.logger.Info("ExportData completed successfully")
 
+	clientName, err := srv.DB.GetClientName(req.Param.Clients[0])
+	if err != nil {
+		return fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0], err)
+	}
+	subject := buildSubject(clientName, req)
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
-	if err := srv.Email.Send(email, flink); err != nil {
+	if err := srv.Email.Send(email, subject, flink); err != nil {
 		return fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
@@ -172,4 +179,21 @@ func buildSQLQuery(req SelloutRequest) (string, error) {
 		return "", fmt.Errorf("failed to marshal %#v: %w", req.Param, err)
 	}
 	return fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserID, string(param)), nil
+}
+
+//"Sellout export_{Название клиента}{(C) - если данные с конкурентами. Если данные без конкурентов, то пусто}{TypeDate}_{Период}"
+//
+func buildSubject(clientName string, req SelloutRequest) string {
+	var buf bytes.Buffer
+
+	buf.WriteString("Sellout export_")
+	buf.WriteString(clientName)
+	if req.Param.WithCompetitors == 1 {
+		buf.WriteString("(C)")
+	}
+	buf.WriteString("_" + req.Param.Period + "_")
+	buf.WriteString(req.Param.BeginDate + "_")
+	buf.WriteString(req.Param.EndDate)
+
+	return buf.String()
 }

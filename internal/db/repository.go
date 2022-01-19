@@ -18,7 +18,6 @@ func (rep Repository) GetDB() *sql.DB {
 	return rep.DB.DB
 }
 
-
 func (rep Repository) GetUserEmail(userID int) ([]string, error) {
 	if err := rep.DB.PingContext(context.Background()); err != nil {
 		return nil, err
@@ -52,4 +51,17 @@ func (rep Repository) GetUserEmail(userID int) ([]string, error) {
 	}
 
 	return emails, nil
+}
+
+func (rep Repository) GetClientName(id int) (string, error) {
+	if err := rep.DB.PingContext(context.Background()); err != nil {
+		return "", err
+	}
+
+	var name string
+	if err := rep.DB.QueryRow("[sellout].[GetClientNameByID]", sql.Named("id", id)).Scan(&name); err != nil {
+		return "", err
+	}
+
+	return name, nil
 }

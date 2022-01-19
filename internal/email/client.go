@@ -7,14 +7,13 @@ import (
 )
 
 var (
-	ErrNoReceivers= errors.New("no receivers")
+	ErrNoReceivers = errors.New("no receivers")
 )
 
-var templateSelloutExport =
-	      "From: %s\n" +
-	      "To: %s\n" +
-		  "Subject: Sellout export\n\n" +
-	      "%s"
+var templateSelloutExport = "From: %s\n" +
+	"To: %s\n" +
+	"Subject: %s\n\n" +
+	"%s"
 
 type Sender struct {
 	from     string
@@ -34,6 +33,7 @@ type smtpServer struct {
 	host string
 	port string
 }
+
 func (s *smtpServer) address() string {
 	return s.host + ":" + s.port
 }
@@ -50,10 +50,10 @@ func NewSender(cfg SenderConfig) Sender {
 	}
 }
 
-func (s Sender) Send(receivers []string, msg string) error {
+func (s Sender) Send(receivers []string, subject, msg string) error {
 	if len(receivers) == 0 {
 		return ErrNoReceivers
 	}
-	body := fmt.Sprintf(templateSelloutExport, s.from, receivers[0], msg)
+	body := fmt.Sprintf(templateSelloutExport, s.from, receivers[0], subject, msg)
 	return smtp.SendMail(s.server.address(), s.auth, s.from, receivers, []byte(body))
 }
