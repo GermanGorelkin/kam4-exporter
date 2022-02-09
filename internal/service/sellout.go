@@ -117,6 +117,10 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
+	if len(req.Param.Clients) == 0 {
+		return fmt.Errorf("error: clients are not set")
+	}
+
 	email, err := srv.DB.GetUserEmail(req.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
