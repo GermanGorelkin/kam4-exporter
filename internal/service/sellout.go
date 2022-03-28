@@ -77,9 +77,12 @@ type SelloutRequest struct {
 		EndDate   string `json:"end_date"`
 		Period    string `json:"period"`
 		Details   string `json:"details"`
-		Clients   []int  `json:"clients"`
-		DataFrom  string `json:"data_from"`
-		Products  []struct {
+		Clients   []struct {
+			ID      int   `json:"id"`
+			Formats []int `json:"formats,omitempty"`
+		} `json:"clients"`
+		DataFrom string `json:"data_from"`
+		Products []struct {
 			Manufacturerid int `json:"manufacturerID,omitempty"`
 			Categoryid     int `json:"categoryID,omitempty"`
 			Subcategoryid  int `json:"subcategoryID,omitempty"`
@@ -134,9 +137,9 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
 	}
 	srv.logger.Info("ExportData completed successfully")
 
-	clientName, err := srv.DB.GetClientName(req.Param.Clients[0])
+	clientName, err := srv.DB.GetClientName(req.Param.Clients[0].ID)
 	if err != nil {
-		return fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0], err)
+		return fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0].ID, err)
 	}
 	subject := buildSubject(clientName, req)
 	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
