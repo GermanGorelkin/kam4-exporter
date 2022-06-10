@@ -91,6 +91,7 @@ type SelloutRequest struct {
 		ValueType       []string `json:"value_type"`
 		WithCompetitors int      `json:"with_competitors"`
 		Wholesale       string   `json:"wholesale"`
+		WithVAT         int      `json:"with_vat,omitempty"`
 	} `json:"param"`
 }
 
