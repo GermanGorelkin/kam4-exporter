@@ -105,7 +105,7 @@ func (srv SelloutService) Run(ctx context.Context) {
 		}()
 
 		srv.logger.Infof("Received request from MQ: %s", string(b))
-		err := srv.handleSellout(ctx, b) // handle
+		_, err := srv.handleSellout(ctx, b) // handle
 		if err != nil {
 			code = "fail"
 			srv.logger.Errorw("Got an error from handleSellout", "err", err)
@@ -115,41 +115,43 @@ func (srv SelloutService) Run(ctx context.Context) {
 	})
 }
 
-func (srv SelloutService) handleSellout(ctx context.Context, b []byte) error {
+func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, error) {
+	var flink string
+
 	var req SelloutRequest
 	if err := json.Unmarshal(b, &req); err != nil {
-		return fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
+		return flink, fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
 	if len(req.Param.Clients) == 0 {
-		return fmt.Errorf("error: clients are not set")
+		return flink, fmt.Errorf("error: clients are not set")
 	}
 
 	email, err := srv.DB.GetUserEmail(req.UserID)
 	if err != nil {
-		return fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
+		return flink, fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
 	}
 	srv.logger.Info("GetUserEmail completed successfully")
 	srv.logger.Debugf("%v for userID=%d", email, req.UserID)
 
 	fileName := srv.genUniqueFileName(srv.Report.FileExtension())
 	if err := srv.exportData(ctx, req, fileName); err != nil {
-		return fmt.Errorf("failed to exportData(%s): %w", fileName, err)
+		return flink, fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
 
 	clientName, err := srv.DB.GetClientName(req.Param.Clients[0].ID)
 	if err != nil {
-		return fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0].ID, err)
+		return flink, fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0].ID, err)
 	}
 	subject := buildSubject(clientName, req)
-	flink := fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
+	flink = fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
 	if err := srv.Email.Send(email, subject, flink); err != nil {
-		return fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
+		return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
 
-	return nil
+	return flink, nil
 }
 
 func (srv SelloutService) genUniqueFileName(extension string) string {
