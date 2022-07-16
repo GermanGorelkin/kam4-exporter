@@ -164,7 +164,7 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		}
 		srvLogger := cfg.logger.Named("http-server")
 		srvLogger.Info("Starting server at %s", cfg.serverAddress)
-		if err := runServer(ctx, cfg.serverAddress); err != nil {
+		if err := runServer(ctx, cfg.serverAddress, srv); err != nil {
 			srvLogger.Errorw("Got an error from http server", "err", err)
 		}
 		srvLogger.Info("Stopping server at %s", cfg.serverAddress)
@@ -176,9 +176,10 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 	return func() error { return mqClient.Close() }, nil
 }
 
-func runServer(ctx context.Context, addr string) error {
+func runServer(ctx context.Context, addr string, so service.SelloutService) error {
 	mux := http.NewServeMux()
 	mux.Handle("/health", server.HandleHealthz(ctx))
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/sellout", server.HandleSellout(ctx, so))
 	return http.ListenAndServe(addr, mux)
 }

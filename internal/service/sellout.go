@@ -110,9 +110,21 @@ func (srv SelloutService) Run(ctx context.Context) {
 			code = "fail"
 			srv.logger.Errorw("Got an error from handleSellout", "err", err)
 		}
-		srv.logger.Infof("Request processing completed: %s", string(b))
+		srv.logger.Infof("Request from MQ processing completed: %s", string(b))
 		return nil
 	})
+}
+
+func (srv SelloutService) HandleSelloutExport(ctx context.Context, b []byte) (string, error) {
+	srv.logger.Infof("Received request from HTTP Server: %s", string(b))
+	link, err := srv.handleSellout(ctx, b)
+	if err != nil {
+		srv.logger.Errorw("Got an error from handleSellout", "err", err)
+		return link, err
+	}
+	srv.logger.Infof("Request from HTTP Server processing completed: %s", string(b))
+
+	return link, nil
 }
 
 func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, error) {
