@@ -186,7 +186,7 @@ func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fi
 
 func buildExcelConfig(req SelloutRequest) report.ExcelConfig {
 	needPivot := false
-	if req.Param.Period == "month" && req.Param.Details == "network" {
+	if req.Param.Period == "month" && req.Param.Details == "client" {
 		needPivot = true
 	}
 
