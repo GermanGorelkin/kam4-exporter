@@ -68,7 +68,7 @@ func (srv XLSXReport) createPivot(ctx context.Context, filePath string, wr *Exce
 	if err := file.AddPivotTable(&excelize.PivotTableOption{
 		DataRange:         dataRange,
 		PivotTableRange:   "pivot!$A$2:$B$2",
-		Rows:              []excelize.PivotTableField{{Data: "Сеть"}},
+		Rows:              []excelize.PivotTableField{{Data: "Клиент"}},
 		Filter:            []excelize.PivotTableField{{Data: "Показатель"}},
 		Data:              pivotDatas,
 		RowGrandTotals:    true,
