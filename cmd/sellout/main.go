@@ -14,6 +14,7 @@ import (
 	"github.com/germangorelkin/kam4-exporter/internal/report"
 	"github.com/germangorelkin/kam4-exporter/internal/server"
 	"github.com/germangorelkin/kam4-exporter/internal/service"
+	"github.com/germangorelkin/kam4-exporter/internal/storage"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -21,7 +22,7 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.24.1"
+	serviceVersion = "0.25.0"
 )
 
 type mainConfig struct {
@@ -114,6 +115,8 @@ func main() {
 }
 
 func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
+	var err error
+
 	obs, _ := metric.NewPrometheusService()
 	dbClient := db.NewRepository(cfg.connDB)
 
@@ -132,6 +135,15 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		log.Fatalf("typeReport=%s is unsupported", cfg.typeReport)
 	}
 
+	var fileStorage storage.Storage
+	fileStorage, err = storage.NewFS(storage.FSConfig{
+		Path: cfg.storagePath,
+		Host: cfg.storageHost,
+	})
+	if err != nil {
+		log.Fatalf("Error storage.NewFS:%v", err)
+	}
+
 	mqClient := rabbitmq.New(rabbitmq.SessionConfig{
 		ExchangeName: "topic_exporter",
 		ExchangeType: "topic",
@@ -147,14 +159,13 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 		Port:     cfg.emailPort,
 	})
 	srv := service.NewSelloutService(service.SelloutServiceConfig{
-		DB:       dbClient,
-		MQ:       mqClient,
-		Email:    emailClient,
-		Report:   reportSrv,
-		FilePath: cfg.storagePath,
-		FileLink: cfg.storageHost,
-		Logger:   cfg.logger.Named("sellout-service"),
-		Metrics:  obs,
+		DB:      dbClient,
+		MQ:      mqClient,
+		Email:   emailClient,
+		Report:  reportSrv,
+		Storage: fileStorage,
+		Logger:  cfg.logger.Named("sellout-service"),
+		Metrics: obs,
 	})
 
 	// http server
@@ -173,7 +184,7 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 	// sellout service
 	srv.Run(ctx)
 
-	return func() error { return mqClient.Close() }, nil
+	return func() error { return mqClient.Close() }, err
 }
 
 func runServer(ctx context.Context, addr string, so service.SelloutService) error {

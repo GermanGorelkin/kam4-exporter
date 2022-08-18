@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/germangorelkin/kam4-exporter/internal/metric"
 	"github.com/germangorelkin/kam4-exporter/internal/report"
-	"go.uber.org/zap"
+	"github.com/germangorelkin/kam4-exporter/internal/storage"
 )
 
 type PubSub interface {
@@ -32,41 +33,32 @@ type SelloutService struct {
 	DB        Repository
 	MQ        PubSub
 	Email     EmailSender
-	FileStore fileStore
+	FileStore storage.Storage
 	Report    Report
 
 	metrics metric.Service
 	logger  *zap.SugaredLogger
 }
 
-type fileStore struct {
-	path string
-	link string
-}
-
 type SelloutServiceConfig struct {
-	DB       Repository
-	MQ       PubSub
-	Report   Report
-	Email    EmailSender
-	FilePath string
-	FileLink string
-	Logger   *zap.SugaredLogger
-	Metrics  metric.Service
+	DB      Repository
+	MQ      PubSub
+	Report  Report
+	Email   EmailSender
+	Storage storage.Storage
+	Logger  *zap.SugaredLogger
+	Metrics metric.Service
 }
 
 func NewSelloutService(cfg SelloutServiceConfig) SelloutService {
 	return SelloutService{
-		DB:     cfg.DB,
-		MQ:     cfg.MQ,
-		Email:  cfg.Email,
-		Report: cfg.Report,
-		FileStore: fileStore{
-			path: cfg.FilePath,
-			link: cfg.FileLink,
-		},
-		logger:  cfg.Logger,
-		metrics: cfg.Metrics,
+		DB:        cfg.DB,
+		MQ:        cfg.MQ,
+		Email:     cfg.Email,
+		Report:    cfg.Report,
+		FileStore: cfg.Storage,
+		logger:    cfg.Logger,
+		metrics:   cfg.Metrics,
 	}
 }
 
@@ -135,10 +127,12 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 		return flink, fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
 
+	// TODO validator
 	if len(req.Param.Clients) == 0 {
 		return flink, fmt.Errorf("error: clients are not set")
 	}
 
+	// email
 	email, err := srv.DB.GetUserEmail(req.UserID)
 	if err != nil {
 		return flink, fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
@@ -146,28 +140,35 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 	srv.logger.Info("GetUserEmail completed successfully")
 	srv.logger.Debugf("%v for userID=%d", email, req.UserID)
 
-	fileName := srv.genUniqueFileName(srv.Report.FileExtension())
+	// gen fileName
+	fileName := storage.UniqueFileName(srv.Report.FileExtension())
+
+	// export
 	if err := srv.exportData(ctx, req, fileName); err != nil {
 		return flink, fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
 
+	// TODO new struct ReportInfo + validator
 	clientName, err := srv.DB.GetClientName(req.Param.Clients[0].ID)
 	if err != nil {
 		return flink, fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0].ID, err)
 	}
+
+	// gen link
+	flink, err = srv.FileStore.GetFileLink(fileName)
+	if err != nil {
+		return flink, fmt.Errorf("failed to GetFileLink(%s): %w", fileName, err)
+	}
+
+	// send email
 	subject := buildSubject(clientName, req)
-	flink = fmt.Sprintf("%s/%s", srv.FileStore.link, fileName)
 	if err := srv.Email.Send(email, subject, flink); err != nil {
 		return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
 
 	return flink, nil
-}
-
-func (srv SelloutService) genUniqueFileName(extension string) string {
-	return fmt.Sprintf("%d.%s", time.Now().UnixNano(), extension)
 }
 
 func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) error {
@@ -177,7 +178,7 @@ func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fi
 	}
 
 	cfg := report.ReportConfig{
-		FilePath:    filepath.Join(srv.FileStore.path, fileName),
+		FilePath:    srv.FileStore.GetFilePath(fileName),
 		SQLQuery:    query,
 		ExcelConfig: buildExcelConfig(req),
 	}
