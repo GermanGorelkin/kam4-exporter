@@ -36,7 +36,7 @@ func NewXLSXReport(cfg XLSXReportConfig) XLSXReport {
 }
 
 func (srv XLSXReport) FileExtension() string {
-	return ".xlsx"
+	return "xlsx"
 }
 
 func (srv XLSXReport) Build(ctx context.Context, cfg ReportConfig) error {

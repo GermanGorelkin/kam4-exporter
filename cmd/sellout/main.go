@@ -22,21 +22,22 @@ import (
 
 const (
 	serviceName    = "sellout-exporter"
-	serviceVersion = "0.25.0"
+	serviceVersion = "0.26.2"
 )
 
 type mainConfig struct {
-	connDB        string
-	amqp          string
-	storageHost   string
-	storagePath   string
-	emailLogin    string
-	emailPassword string
-	emailHost     string
-	emailPort     string
-	serverAddress string
-	typeReport    string
-	logger        *zap.SugaredLogger
+	connDB          string
+	amqp            string
+	storageHost     string
+	storagePath     string
+	storageS3Bucket string
+	emailLogin      string
+	emailPassword   string
+	emailHost       string
+	emailPort       string
+	serverAddress   string
+	typeReport      string
+	logger          *zap.SugaredLogger
 }
 
 type fnClose func() error
@@ -62,14 +63,21 @@ func main() {
 	if cfg.amqp == "" {
 		appLogger.Fatal("AMQP is not set.")
 	}
+
+	// TODO validator
 	cfg.storageHost = os.Getenv("IMAGE_STORAGE_HOST")
-	if cfg.storageHost == "" {
-		appLogger.Fatal("IMAGE_STORAGE_HOST is not set.")
-	}
+	// if cfg.storageHost == "" {
+	// 	appLogger.Fatal("IMAGE_STORAGE_HOST is not set.")
+	// }
+	cfg.storageS3Bucket = os.Getenv("IMAGE_STORAGE_S3_BUCKET")
+	// if cfg.storagePath == "" {
+	// 	appLogger.Fatal("IMAGE_STORAGE_PATH is not set.")
+	// }
 	cfg.storagePath = os.Getenv("IMAGE_STORAGE_PATH")
 	if cfg.storagePath == "" {
 		appLogger.Fatal("IMAGE_STORAGE_PATH is not set.")
 	}
+
 	cfg.emailLogin = os.Getenv("EMAIL_LOGIN")
 	if cfg.emailLogin == "" {
 		appLogger.Fatal("EMAIL_LOGIN is not set.")
@@ -136,13 +144,24 @@ func realMain(ctx context.Context, cfg mainConfig) (fnClose, error) {
 	}
 
 	var fileStorage storage.Storage
-	fileStorage, err = storage.NewFS(storage.FSConfig{
-		Path: cfg.storagePath,
-		Host: cfg.storageHost,
+
+	// TODO switch by storage type
+
+	fileStorage, err = storage.NewUploader(storage.UploaderConfig{
+		Bucket:   cfg.storageS3Bucket,
+		FilePath: cfg.storagePath,
 	})
 	if err != nil {
-		log.Fatalf("Error storage.NewFS:%v", err)
+		log.Fatalf("Error storage.NewUploader:%v", err)
 	}
+
+	// fileStorage, err = storage.NewFS(storage.FSConfig{
+	// 	Path: cfg.storagePath,
+	// 	Host: cfg.storageHost,
+	// })
+	// if err != nil {
+	// 	log.Fatalf("Error storage.NewFS:%v", err)
+	// }
 
 	mqClient := rabbitmq.New(rabbitmq.SessionConfig{
 		ExchangeName: "topic_exporter",

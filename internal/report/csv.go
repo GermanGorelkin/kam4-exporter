@@ -33,7 +33,7 @@ func NewCSVReport(cfg CSVReportConfig) CSVReport {
 }
 
 func (srv CSVReport) FileExtension() string {
-	return ".csv"
+	return "csv"
 }
 
 func (srv CSVReport) Build(ctx context.Context, cfg ReportConfig) (err error) {
