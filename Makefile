@@ -4,6 +4,9 @@ BIN_DIR_LINUX=bin/$(cmd)/linux
 BIN_DIR_WIN=bin/$(cmd)/win
 BIN_DIR_DARWIN=bin/$(cmd)/darwin
 
+GIT_TAG=$(shell git describe --abbrev=0 --tags)
+VERSION=$(GIT_TAG:v%=%)
+
 GO_BUILD=go build
 
 build:
@@ -20,3 +23,5 @@ endif
 ifeq ($(os), darwin)
 	cd $(BIN_DIR_DARWIN) && ./run.sh
 endif
+docker: build
+	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t ghcr.io/germangorelkin/exporter-$(cmd):$(VERSION) --no-cache .
