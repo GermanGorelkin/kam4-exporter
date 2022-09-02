@@ -24,4 +24,4 @@ ifeq ($(os), darwin)
 	cd $(BIN_DIR_DARWIN) && ./run.sh
 endif
 docker: build
-	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t ghcr.io/germangorelkin/exporter-$(cmd):$(VERSION) --no-cache .
+	docker build -f build/Dockerfile --build-arg "CMD=$(cmd)" -t cr.yandex/crpoinjsjge915cq8ufl/exporter-$(cmd):$(VERSION) --no-cache .

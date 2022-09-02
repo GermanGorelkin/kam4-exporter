@@ -4,7 +4,7 @@ RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificat
 
 WORKDIR /app
 COPY . ./
-RUN CGO_ENABLED=0 go build -o bin/app -v cmd/${CMD}/main.go
+RUN GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/app -v cmd/${CMD}/main.go
 
 
 FROM scratch
