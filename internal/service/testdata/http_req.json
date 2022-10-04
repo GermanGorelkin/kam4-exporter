@@ -1,0 +1,40 @@
+{
+    "param": {
+        "details": "client",
+        "with_vat": 0,
+        "value_type": [
+            "money",
+            "amount",
+            "kg",
+            "mag",
+            "wd",
+            "nd"
+        ],
+        "clients": [
+            {
+                "id": 389,
+                "formats": [
+                    8
+                ]
+            }
+        ],
+        "begin_date": "01.01.2021",
+        "end_date": "31.10.2022",
+        "dimension": null,
+        "data_from": "client",
+        "with_competitors": 1,
+        "wholesale": "ALL",
+        "data_mode": null,
+        "products": [
+            {
+                "manufacturerID": null,
+                "brandID": null,
+                "categoryID": "1",
+                "subcategoryID": null
+            }
+        ],
+        "period": "month",
+        "channel_networks": null
+    },
+    "user_id": 1
+}

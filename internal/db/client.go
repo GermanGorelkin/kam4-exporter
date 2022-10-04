@@ -36,7 +36,7 @@ func (c *client) PingContext(ctx context.Context) error {
 func NewRepository(connString string) Repository {
 	db, err := sql.Open("sqlserver", connString)
 	if err != nil {
-		err = fmt.Errorf("failed to open conn to database: %w\n", err)
+		err = fmt.Errorf("failed to open conn to database: %w", err)
 		log.Panic(err)
 	}
 	return Repository{DB: &client{db}}

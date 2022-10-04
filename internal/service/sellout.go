@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/germangorelkin/kam4-exporter/internal/metric"
+	"github.com/germangorelkin/kam4-exporter/internal/model"
 	"github.com/germangorelkin/kam4-exporter/internal/report"
 	"github.com/germangorelkin/kam4-exporter/internal/storage"
 )
@@ -23,6 +24,7 @@ type EmailSender interface {
 type Repository interface {
 	GetUserEmail(userID int) ([]string, error)
 	GetClientName(id int) (string, error)
+	GetSelloutOptions(data string) (model.SelloutOptions, error)
 }
 type Report interface {
 	Build(ctx context.Context, cfg report.ReportConfig) error
@@ -85,6 +87,16 @@ type SelloutRequest struct {
 		Wholesale       string   `json:"wholesale"`
 		WithVAT         int      `json:"with_vat,omitempty"`
 	} `json:"param"`
+
+	DataRaw []byte
+}
+
+func (s SelloutRequest) Validator() error {
+	if len(s.Param.Clients) == 0 {
+		return fmt.Errorf("clients must be set")
+	}
+
+	return nil
 }
 
 func (srv SelloutService) Run(ctx context.Context) {
@@ -126,34 +138,25 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 	if err := json.Unmarshal(b, &req); err != nil {
 		return flink, fmt.Errorf("failed to unmarshal %s: %w", string(b), err)
 	}
-
-	// TODO validator
-	if len(req.Param.Clients) == 0 {
-		return flink, fmt.Errorf("error: clients are not set")
+	// req.DataRaw = b
+	if err := req.Validator(); err != nil {
+		return flink, err
 	}
 
-	// email
-	email, err := srv.DB.GetUserEmail(req.UserID)
+	// get sellout options
+	opts, err := srv.DB.GetSelloutOptions(string(b))
 	if err != nil {
-		return flink, fmt.Errorf("failed to GetUserEmail(%d): %w", req.UserID, err)
+		return flink, fmt.Errorf("failed to GetSelloutOptions %s: %w", string(b), err)
 	}
-	srv.logger.Info("GetUserEmail completed successfully")
-	srv.logger.Debugf("%v for userID=%d", email, req.UserID)
 
 	// gen fileName
 	fileName := storage.UniqueFileName(srv.Report.FileExtension())
 
 	// export
-	if err := srv.exportData(ctx, req, fileName); err != nil {
+	if err := srv.exportData(ctx, req, fileName, opts); err != nil {
 		return flink, fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
 	srv.logger.Info("ExportData completed successfully")
-
-	// TODO new struct ReportInfo + validator
-	clientName, err := srv.DB.GetClientName(req.Param.Clients[0].ID)
-	if err != nil {
-		return flink, fmt.Errorf("failed to GetClientName(%d): %w", req.Param.Clients[0].ID, err)
-	}
 
 	// gen link
 	flink, err = srv.FileStore.GetFileLink(fileName)
@@ -162,16 +165,16 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 	}
 
 	// send email
-	subject := buildSubject(clientName, req)
-	if err := srv.Email.Send(email, subject, flink); err != nil {
-		return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", email, flink, err)
+	subject := buildSubject(opts.FirstClient, req)
+	if err := srv.Email.Send([]string{opts.UserEmail}, subject, flink); err != nil {
+		return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", opts.UserEmail, flink, err)
 	}
 	srv.logger.Info("EmailSend completed successfully")
 
 	return flink, nil
 }
 
-func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string) error {
+func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fileName string, opts model.SelloutOptions) error {
 	query, err := buildSQLQuery(req)
 	if err != nil {
 		return fmt.Errorf("failed to build sql query:%w", err)
@@ -181,6 +184,7 @@ func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fi
 		FilePath:    srv.FileStore.GetFilePath(fileName),
 		SQLQuery:    query,
 		ExcelConfig: buildExcelConfig(req),
+		Data:        opts,
 	}
 	return srv.Report.Build(ctx, cfg)
 }
@@ -204,8 +208,7 @@ func buildSQLQuery(req SelloutRequest) (string, error) {
 	return fmt.Sprintf("exec [api].[Sellout_Export] @userID=%d, @data=N'%s';", req.UserID, string(param)), nil
 }
 
-//"Sellout export_{Название клиента}{(C) - если данные с конкурентами. Если данные без конкурентов, то пусто}{TypeDate}_{Период}"
-//
+// "Sellout export_{Название клиента}{(C) - если данные с конкурентами. Если данные без конкурентов, то пусто}{TypeDate}_{Период}"
 func buildSubject(clientName string, req SelloutRequest) string {
 	var buf bytes.Buffer
 

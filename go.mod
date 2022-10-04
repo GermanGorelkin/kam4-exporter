@@ -1,6 +1,6 @@
 module github.com/germangorelkin/kam4-exporter
 
-go 1.18
+go 1.19
 
 require (
 	github.com/Rican7/retry v0.1.0
@@ -11,7 +11,7 @@ require (
 	github.com/germangorelkin/sql2csv v0.7.0
 	github.com/prometheus/client_golang v1.9.0
 	github.com/streadway/amqp v1.0.0
-	github.com/xuri/excelize/v2 v2.4.1
+	github.com/xuri/excelize/v2 v2.6.1
 	go.uber.org/zap v1.16.0
 )
 
@@ -39,14 +39,15 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.15.0 // indirect
 	github.com/prometheus/procfs v0.2.0 // indirect
-	github.com/richardlehane/mscfb v1.0.3 // indirect
-	github.com/richardlehane/msoleps v1.0.1 // indirect
-	github.com/xuri/efp v0.0.0-20210322160811-ab561f5b45e3 // indirect
+	github.com/richardlehane/mscfb v1.0.4 // indirect
+	github.com/richardlehane/msoleps v1.0.3 // indirect
+	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
+	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
-	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985 // indirect
-	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
-	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8 // indirect
+	golang.org/x/net v0.0.0-20220812174116-3211cb980234 // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/protobuf v1.23.0 // indirect
 )

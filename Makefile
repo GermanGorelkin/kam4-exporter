@@ -9,10 +9,12 @@ VERSION=$(GIT_TAG:v%=%)
 
 GO_BUILD=go build
 
+.PHONY: build run docker
+
 build:
 	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_BUILD) -o $(BIN_DIR_LINUX)/$(cmd) -v $(CMD_DIR)/main.go
 	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO_BUILD) -o $(BIN_DIR_WIN)/$(cmd).exe -v $(CMD_DIR)/main.go
-	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o $(BIN_DIR_DARWIN)/$(cmd) -v $(CMD_DIR)/main.go
+	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO_BUILD) -o $(BIN_DIR_DARWIN)/$(cmd) -v $(CMD_DIR)/main.go
 run: build
 ifeq ($(os), linux)
 	cd $(BIN_DIR_LINUX) && ./run.sh
