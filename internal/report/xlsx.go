@@ -164,11 +164,6 @@ func (srv XLSXReport) addHeaderForOptions(file *excelize.File) error {
 	style, err := file.NewStyle(&excelize.Style{
 		Font: &excelize.Font{
 			Bold: true,
-			// Italic: true,
-			// Family: "Times New Roman",
-			// Size:   36,
-			// Color:  "#777777",
-
 		},
 	})
 	if err != nil {
@@ -223,8 +218,28 @@ func (srv XLSXReport) createPivot(ctx context.Context, filePath string, wr *Exce
 		return fmt.Errorf("failed to AddPivotTable:%w", err)
 	}
 
+	if err := srv.addTipsForPivot(ctx, file); err != nil {
+		return fmt.Errorf("failed to addTipsForPivot:%w", err)
+	}
+
 	if err := file.SaveAs(filePath); err != nil {
 		return fmt.Errorf("failed to SaveAs:%w", err)
+	}
+
+	return nil
+}
+
+func (srv XLSXReport) addTipsForPivot(ctx context.Context, file *excelize.File) error {
+	style, err := file.NewStyle(`{"font":{"bold":true},"fill":{"type":"pattern","color":["#ff4f00"],"pattern":1}}`)
+	if err != nil {
+		return fmt.Errorf("failed to NewStyle:%w", err)
+	}
+
+	if err := file.SetCellValue("pivot", "C1", "<---выберите показатель"); err != nil {
+		return fmt.Errorf("failed to SetCellValue(A1):%w", err)
+	}
+	if err := file.SetCellStyle("pivot", "C1", "C1", style); err != nil {
+		return fmt.Errorf("failed to SetCellStyle:%w", err)
 	}
 
 	return nil
