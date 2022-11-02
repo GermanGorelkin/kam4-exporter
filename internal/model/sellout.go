@@ -16,4 +16,6 @@ type SelloutOptions struct {
 	Wholesale       string `db:"wholesale"`
 	UserEmail       string `db:"user_email"`
 	FirstClient     string `db:"first_client"`
+
+	NeedSendEmail bool `db:"need_send_email"`
 }

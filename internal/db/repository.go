@@ -79,7 +79,8 @@ func (rep Repository) GetSelloutOptions(data string) (options model.SelloutOptio
 		&options.WithCompetitors, &options.Category, &options.Subcategory,
 		&options.Manufacturer, &options.Brand, &options.ValueType,
 		&options.WithVat, &options.Wholesale,
-		&options.UserEmail, &options.FirstClient)
+		&options.UserEmail, &options.FirstClient,
+		&options.NeedSendEmail)
 	if err != nil {
 		return options, err
 	}

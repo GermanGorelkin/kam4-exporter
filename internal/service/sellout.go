@@ -165,11 +165,13 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 	}
 
 	// send email
-	subject := buildSubject(opts.FirstClient, req)
-	if err := srv.Email.Send([]string{opts.UserEmail}, subject, flink); err != nil {
-		return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", opts.UserEmail, flink, err)
+	if opts.NeedSendEmail {
+		subject := buildSubject(opts.FirstClient, req)
+		if err := srv.Email.Send([]string{opts.UserEmail}, subject, flink); err != nil {
+			return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", opts.UserEmail, flink, err)
+		}
+		srv.logger.Info("EmailSend completed successfully")
 	}
-	srv.logger.Info("EmailSend completed successfully")
 
 	return flink, nil
 }
