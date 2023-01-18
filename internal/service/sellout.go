@@ -86,6 +86,8 @@ type SelloutRequest struct {
 		WithCompetitors int      `json:"with_competitors"`
 		Wholesale       string   `json:"wholesale"`
 		WithVAT         int      `json:"with_vat,omitempty"`
+		Language        string   `json:"language,omitempty"`
+		MoneyType       string   `json:"money_type,omitempty"`
 	} `json:"param"`
 
 	DataRaw []byte
