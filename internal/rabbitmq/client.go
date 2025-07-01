@@ -355,7 +355,9 @@ func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) err
 	}()
 
 	if err := handler(d.Body); err == nil {
-		_ = d.Ack(false)
+		if err := d.Ack(false); err != nil {
+			session.logger.Errorf("failed to Ack: %s", err)
+		}
 	} else {
 		session.logger.Errorf("failed to handleDelivery: %s", err)
 		_ = d.Nack(false, true)
