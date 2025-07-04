@@ -111,25 +111,25 @@ func (srv SelloutService) Run(ctx context.Context) {
 			srv.metrics.TotalSelloutExport(code)
 		}()
 
-		srv.logger.Infof("Received request from MQ: %s", string(b))
+		srv.logger.Infow("Received request from MQ", "data", string(b))
 		_, err := srv.handleSellout(ctx, b) // handle
 		if err != nil {
 			code = "fail"
-			srv.logger.Errorw("Got an error from handleSellout", "err", err)
+			srv.logger.Errorw("Got an error from handleSellout", "error", err)
 		}
-		srv.logger.Infof("Request from MQ processing completed: %s", string(b))
+		srv.logger.Infow("Request from MQ processing completed", "data", string(b))
 		return nil
 	})
 }
 
 func (srv SelloutService) HandleSelloutExport(ctx context.Context, b []byte) (string, error) {
-	srv.logger.Infof("Received request from HTTP Server: %s", string(b))
+	srv.logger.Infow("Received request from HTTP Server", "data", string(b))
 	link, err := srv.handleSellout(ctx, b)
 	if err != nil {
-		srv.logger.Errorw("Got an error from handleSellout", "err", err)
+		srv.logger.Errorw("Got an error from handleSellout", "error", err)
 		return link, err
 	}
-	srv.logger.Infof("Request from HTTP Server processing completed: %s", string(b))
+	srv.logger.Infow("Request from HTTP Server processing completed", "data", string(b))
 
 	return link, nil
 }
@@ -156,10 +156,12 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 	fileName := storage.UniqueFileName(srv.Report.FileExtension())
 
 	// export
+	srv.logger.Infow("Starting export of data to file", "file", fileName)
 	if err := srv.exportData(ctx, req, fileName, opts); err != nil {
+		srv.logger.Errorw("Failed to export data to file", "file", fileName, "error", err)
 		return flink, fmt.Errorf("failed to exportData(%s): %w", fileName, err)
 	}
-	srv.logger.Info("ExportData completed successfully")
+	srv.logger.Infow("Data export to file completed successfully", "file", fileName)
 
 	// gen link
 	flink, err = srv.FileStore.GetFileLink(fileName)
@@ -173,7 +175,7 @@ func (srv SelloutService) handleSellout(ctx context.Context, b []byte) (string, 
 		if err := srv.Email.Send([]string{opts.UserEmail}, subject, flink); err != nil {
 			return flink, fmt.Errorf("failed to EmailSend(%s,%s): %w", opts.UserEmail, flink, err)
 		}
-		srv.logger.Info("EmailSend completed successfully")
+		srv.logger.Infow("Email sent successfully", "to", opts.UserEmail, "subject", subject, "link", flink)
 	}
 
 	return flink, nil
@@ -184,6 +186,7 @@ func (srv SelloutService) exportData(ctx context.Context, req SelloutRequest, fi
 	if err != nil {
 		return fmt.Errorf("failed to build sql query:%w", err)
 	}
+	srv.logger.Infow("SQL query generated for export", "query", query)
 
 	cfg := report.ReportConfig{
 		FilePath:    srv.FileStore.GetFilePath(fileName),
