@@ -347,19 +347,24 @@ func (session *Session) Subscribe(handler func([]byte) error) {
 }
 
 func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) error) {
+	msgId := d.MessageId
+	session.logger.Infow("Start processing message", "msgId", msgId)
+
 	defer func() {
 		if r := recover(); r != nil {
-			session.logger.Errorf("Handler panic:%v", r)
+			session.logger.Errorw("panic", r, "msgId", msgId)
 			_ = d.Nack(false, true)
 		}
 	}()
 
 	if err := handler(d.Body); err == nil {
 		if err := d.Ack(false); err != nil {
-			session.logger.Errorf("failed to Ack: %s", err)
+			session.logger.Errorw("failed to Ack", err, "msgId", msgId)
+		} else {
+			session.logger.Infow("Message processed successfully", "msgId", msgId)
 		}
 	} else {
-		session.logger.Errorf("failed to handleDelivery: %s", err)
+		session.logger.Errorw("failed to handleDelivery", err, "msgId", msgId)
 		_ = d.Nack(false, true)
 	}
 }
