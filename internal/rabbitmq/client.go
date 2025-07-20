@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -26,6 +27,29 @@ var (
 	ErrShutdown      = errors.New("session is shutting down")
 )
 
+type MsgSeen struct {
+	seen map[string]bool
+	mu   sync.RWMutex
+}
+
+func (ms *MsgSeen) Get(id string) bool {
+	ms.mu.RLock()
+	defer ms.mu.Unlock()
+	return ms.seen[id]
+}
+
+func (ms *MsgSeen) Set(id string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	ms.seen[id] = true
+}
+
+func NewMsgSeen() *MsgSeen {
+	return &MsgSeen{
+		seen: map[string]bool{},
+	}
+}
+
 type Session struct {
 	exchangeName string
 	exchangeType string
@@ -42,7 +66,8 @@ type Session struct {
 	isReady         bool
 	close           chan struct{}
 
-	logger *zap.SugaredLogger
+	logger  *zap.SugaredLogger
+	msgSeen *MsgSeen
 }
 
 type SessionConfig struct {
@@ -69,7 +94,8 @@ func New(cfg SessionConfig) *Session {
 		done:    make(chan bool),
 		close:   make(chan struct{}),
 
-		logger: cfg.Logger,
+		logger:  cfg.Logger,
+		msgSeen: NewMsgSeen(),
 	}
 	go session.handleReconnect(cfg.Addr)
 	return &session
@@ -348,6 +374,11 @@ func (session *Session) Subscribe(handler func([]byte) error) {
 
 func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) error) {
 	msgId := d.MessageId
+	if msgId != "" && session.msgSeen.Get(msgId) {
+		d.Ack(false)
+		session.logger.Errorw("Message with this msgId was already processed", "msgId", msgId)
+		return
+	}
 	session.logger.Infow("Start processing message", "msgId", msgId)
 
 	defer func() {
@@ -361,6 +392,7 @@ func (session *Session) handleDelivery(d amqp.Delivery, handler func([]byte) err
 		if err := d.Ack(false); err != nil {
 			session.logger.Errorw("failed to Ack", err, "msgId", msgId)
 		} else {
+			session.msgSeen.Set(msgId)
 			session.logger.Infow("Message processed successfully", "msgId", msgId)
 		}
 	} else {
