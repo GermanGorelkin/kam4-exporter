@@ -34,7 +34,7 @@ type MsgSeen struct {
 
 func (ms *MsgSeen) Get(id string) bool {
 	ms.mu.RLock()
-	defer ms.mu.Unlock()
+	defer ms.mu.RUnlock()
 	return ms.seen[id]
 }
 
