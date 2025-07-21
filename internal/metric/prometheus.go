@@ -22,7 +22,7 @@ func NewPrometheusService() (*PrometheusService, error) {
 	s.durationSelloutExport = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "exporter_sellout_duration_seconds",
 		Help:    "The latency of export Sellout.",
-		Buckets: []float64{1, 2, 3, 4, 5, 7, 10, 15, 20, 25, 30, 40, 50, 60, 90, 120, 180},
+		Buckets: []float64{10, 30, 60, 120, 180, 240, 300, 360, 420, 480, 600, 900, 1200, 1800},
 	}, []string{"code"})
 
 	// Registering
