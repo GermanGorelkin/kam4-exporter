@@ -1,6 +1,6 @@
 package metric
 
 type Service interface {
-	DurationSelloutExport(code string, val float64)
-	TotalSelloutExport(code string)
+	DurationSelloutExport(val float64, code, source string)
+	TotalSelloutExport(code, source string)
 }

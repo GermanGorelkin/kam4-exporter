@@ -107,8 +107,8 @@ func (srv SelloutService) Run(ctx context.Context) {
 		code := "success"
 		started := time.Now()
 		defer func() {
-			srv.metrics.DurationSelloutExport(code, time.Since(started).Seconds())
-			srv.metrics.TotalSelloutExport(code)
+			srv.metrics.DurationSelloutExport(time.Since(started).Seconds(), code, "mq")
+			srv.metrics.TotalSelloutExport(code, "mq")
 		}()
 
 		srv.logger.Infow("Received request from MQ", "data", string(b))
@@ -123,10 +123,18 @@ func (srv SelloutService) Run(ctx context.Context) {
 }
 
 func (srv SelloutService) HandleSelloutExport(ctx context.Context, b []byte) (string, error) {
+	code := "success"
+	started := time.Now()
+	defer func() {
+		srv.metrics.DurationSelloutExport(time.Since(started).Seconds(), code, "http")
+		srv.metrics.TotalSelloutExport(code, "http")
+	}()
+
 	srv.logger.Infow("Received request from HTTP Server", "data", string(b))
 	link, err := srv.handleSellout(ctx, b)
 	if err != nil {
 		srv.logger.Errorw("Got an error from handleSellout", "error", err)
+		code = "fail"
 		return link, err
 	}
 	srv.logger.Infow("Request from HTTP Server processing completed", "data", string(b))

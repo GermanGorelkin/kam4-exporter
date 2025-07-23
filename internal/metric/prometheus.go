@@ -17,13 +17,13 @@ func NewPrometheusService() (*PrometheusService, error) {
 	s.totalSelloutExport = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "exporter_sellout_total",
 		Help: "Total number of export Sellout.",
-	}, []string{"code"})
+	}, []string{"code", "source"})
 
 	s.durationSelloutExport = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "exporter_sellout_duration_seconds",
 		Help:    "The latency of export Sellout.",
 		Buckets: []float64{10, 30, 60, 120, 180, 240, 300, 360, 420, 480, 600, 900, 1200, 1800},
-	}, []string{"code"})
+	}, []string{"code", "source"})
 
 	// Registering
 	err := prometheus.Register(s.totalSelloutExport)
@@ -39,10 +39,10 @@ func NewPrometheusService() (*PrometheusService, error) {
 	return &s, nil
 }
 
-func (srv *PrometheusService) DurationSelloutExport(code string, val float64) {
-	srv.durationSelloutExport.WithLabelValues(code).Observe(val)
+func (srv *PrometheusService) DurationSelloutExport(val float64, code, source string) {
+	srv.durationSelloutExport.WithLabelValues(code, source).Observe(val)
 }
 
-func (srv *PrometheusService) TotalSelloutExport(code string) {
-	srv.totalSelloutExport.WithLabelValues(code).Inc()
+func (srv *PrometheusService) TotalSelloutExport(code, source string) {
+	srv.totalSelloutExport.WithLabelValues(code, source).Inc()
 }
