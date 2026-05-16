@@ -75,7 +75,7 @@ type SelloutRequest struct {
 			ID              int    `json:"id"`
 			Formats         []int  `json:"formats,omitempty"`
 			DataFrom        string `json:"data_from,omitempty"`
-			WithCompetitors int    `json:"with_competitors,omitempty"`
+			WithCompetitors int    `json:"with_competitors"`
 		} `json:"clients"`
 		DataFrom string `json:"data_from"`
 		Products []struct {
